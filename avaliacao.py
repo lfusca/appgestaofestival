@@ -4,6 +4,7 @@ from psycopg2 import sql, errors
 from dotenv import load_dotenv
 import os
 import pandas as pd
+from streamlit_autorefresh import st_autorefresh
 
 st.title("Tela de Votação")
 
@@ -20,7 +21,7 @@ def get_connection():
         st.error(f"Erro na conexão com o banco de dados: {e}")
         return None
 
-# Função para autenticar jurado
+# Função para autenticar jurado (case-insensitive)
 def autenticar_jurado(login, senha):
     try:
         conn = get_connection()
@@ -30,7 +31,7 @@ def autenticar_jurado(login, senha):
         query = '''
             SELECT id_jurado, nome, senha 
             FROM tbl_jurados 
-            WHERE login = %s;
+            WHERE LOWER(login) = LOWER(%s);
         '''
         cursor.execute(query, (login,))
         result = cursor.fetchone()
@@ -98,6 +99,32 @@ def carregar_criterios(id_modalidade):
         return criterios
     except Exception as e:
         st.error(f"Erro ao carregar critérios: {e}")
+        return []
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if conn:
+            conn.close()
+
+# Função para carregar participantes de uma equipe
+def carregar_participantes(id_equipe):
+    try:
+        conn = get_connection()
+        if not conn:
+            return []
+        cursor = conn.cursor()
+        query = '''
+            SELECT nome 
+            FROM tbl_participantes 
+            WHERE id_equipe = %s
+            ORDER BY nome;
+        '''
+        cursor.execute(query, (int(id_equipe),))  # Converter para int
+        rows = cursor.fetchall()
+        participantes = [row[0] for row in rows]
+        return participantes
+    except Exception as e:
+        st.error(f"Erro ao carregar participantes: {e}")
         return []
     finally:
         if 'cursor' in locals():
@@ -176,7 +203,12 @@ def exibir_formulario_voto(id_equipe, id_jurado, criterios):
         st.error("Nenhuma nota encontrada para este jurado e equipe.")
         return
     
-    with st.form("form_notas"):
+    # Carregar participantes da equipe
+    participantes = carregar_participantes(id_equipe)
+    if participantes:
+        st.write("**Participantes:** " + ", ".join(participantes))
+    
+    with st.form(f"form_notas_{id_equipe}"):
         notas_dict = {}
         
         for index, row in df_notas.iterrows():
@@ -192,7 +224,7 @@ def exibir_formulario_voto(id_equipe, id_jurado, criterios):
                     f"{criterio}",
                     options=[6,7,8,9,10],
                     index=0 if nota_atual is None else nota_atual - 6,
-                    key=f"nota_{id_nota}"
+                    key=f"nota_{id_equipe}_{id_nota}"
                 )
                 notas_dict[id_nota] = nota_selecionada
         
@@ -214,7 +246,7 @@ def exibir_formulario_voto(id_equipe, id_jurado, criterios):
                             sucesso = False
                 if sucesso:
                     st.success("Notas salvas com sucesso!")
-                    st.rerun()  # Use st.rerun() para recarregar a aplicação
+                    st_autorefresh(interval=5000, limit=1, key="data_refresh")  # Recarrega após 5 segundos
                 else:
                     st.error("Ocorreu um erro ao salvar as notas.")
 
@@ -281,7 +313,7 @@ if st.session_state['jurado_id'] is None:
                 if resultado:
                     st.session_state['jurado_id'], st.session_state['jurado_nome'] = resultado
                     st.success(f"Bem-vindo, {st.session_state['jurado_nome']}!")
-                    st.rerun()  # Use st.rerun() para recarregar a aplicação
+                    st_autorefresh(interval=2000, limit=1, key="login_refresh")  # Recarrega após 2 segundos
                 else:
                     st.error("Credenciais inválidas. Por favor, tente novamente.")
     # Apenas para fins de teste, descomente a linha abaixo para acessar a interface de registro de jurados
@@ -292,15 +324,17 @@ else:
     if st.sidebar.button("Logout"):
         st.session_state['jurado_id'] = None
         st.session_state['jurado_nome'] = None
-        st.rerun()  # Use st.rerun() para recarregar a aplicação
+        st_autorefresh(interval=2000, limit=1, key="logout_refresh")  # Recarrega após 2 segundos
 
-    st.write(f"Bem-vindo, **{st.session_state['jurado_nome']}**! Aguardando liberação para votar.")
+    st.write(f"Bem-vindo, **{st.session_state['jurado_nome']}**! Aguardando equipes para votar.")
 
     # Carrega equipes em votação
     df_equipes = carregar_equipes_votando()
 
     if df_equipes.empty:
-        st.info("Não há votações em andamento no momento.")
+        st.info("Não há votações em andamento no momento. Aguardando atualização...")
+        # Adiciona o autorefresh para verificar novamente em 5 segundos
+        st_autorefresh(interval=5000, limit=100, key="voting_refresh")  # Recarrega a cada 5 segundos
     else:
         # Iterar sobre todas as equipes disponíveis para votação
         for index, equipe in df_equipes.iterrows():
@@ -336,7 +370,7 @@ else:
                     cursor.close()
                 if conn:
                     conn.close()
-
+    
             if id_modalidade_equipe:
                 criterios = carregar_criterios(id_modalidade_equipe)
                 if not criterios:
