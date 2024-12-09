@@ -6,6 +6,8 @@ import os
 import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
+# Configuração da página
+st.set_page_config(page_title="Tela de Votação", layout="wide")
 st.title("Tela de Votação")
 
 # Carrega as variáveis de ambiente
@@ -53,20 +55,24 @@ def autenticar_jurado(login, senha):
         if conn:
             conn.close()
 
-# Função para carregar equipes com status 'votando'
-def carregar_equipes_votando():
+# Função para carregar equipes com status 'votando' para o jurado atual
+def carregar_equipes_votando(id_jurado):
     try:
         conn = get_connection()
         if not conn:
             return pd.DataFrame()
         cursor = conn.cursor()
         query = '''
-            SELECT id_equipe, nome, grau, ficha_tecnica 
-            FROM tbl_equipes 
-            WHERE status_votacao = 'votando'
-            ORDER BY nome;
+            SELECT DISTINCT e.id_equipe, e.nome, e.grau, e.ficha_tecnica, m.id_modalidade AS modalidade_id, m.nome AS modalidade
+            FROM tbl_equipes e
+            JOIN tbl_modalidades m ON e.id_modalidade = m.id_modalidade
+            JOIN tbl_notas n ON e.id_equipe = n.id_equipe
+            WHERE e.status_votacao = 'votando'
+              AND n.id_jurado = %s
+              AND n.status IN ('votando', 'liberado')
+            ORDER BY e.nome;
         '''
-        cursor.execute(query)
+        cursor.execute(query, (id_jurado,))
         rows = cursor.fetchall()
         colunas = [desc[0] for desc in cursor.description]
         df = pd.DataFrame(rows, columns=colunas)
@@ -149,6 +155,7 @@ def carregar_notas_jurado(id_equipe, id_jurado):
             FROM tbl_notas n
             JOIN tbl_criterios c ON n.id_criterio = c.id_criterio
             WHERE n.id_equipe = %s AND n.id_jurado = %s
+              AND n.status IN ('votando', 'liberado')
             ORDER BY c.nome;
         '''
         cursor.execute(query, (int(id_equipe), int(id_jurado)))  # Converter para int
@@ -192,21 +199,18 @@ def salvar_notas(id_nota, nota):
             conn.close()
 
 # Função para exibir formulário de voto
-def exibir_formulario_voto(id_equipe, id_jurado, criterios):
+def exibir_formulario_voto(id_equipe, id_jurado, criterios, participantes, modalidade):
     st.markdown("---")
-    st.write("### Inserir Notas")
+    st.write(f"### Votação para a Equipe: **{participantes[0] if participantes else 'Sem Participantes'}**")
+    st.write(f"**Modalidade:** {modalidade}")
+    st.write(f"**Participantes:** " + ", ".join(participantes))
     
     # Carregar notas existentes
     df_notas = carregar_notas_jurado(id_equipe, id_jurado)
     
     if df_notas.empty:
-        st.error("Nenhuma nota encontrada para este jurado e equipe.")
+        st.write("Todas as notas já foram salvas para esta equipe.")
         return
-    
-    # Carregar participantes da equipe
-    participantes = carregar_participantes(id_equipe)
-    if participantes:
-        st.write("**Participantes:** " + ", ".join(participantes))
     
     with st.form(f"form_notas_{id_equipe}"):
         notas_dict = {}
@@ -246,7 +250,7 @@ def exibir_formulario_voto(id_equipe, id_jurado, criterios):
                             sucesso = False
                 if sucesso:
                     st.success("Notas salvas com sucesso!")
-                    st_autorefresh(interval=5000, limit=1, key="data_refresh")  # Recarrega após 5 segundos
+                    st_autorefresh(interval=2000, limit=1, key=f"refresh_{id_equipe}")  # Recarrega após 2 segundos
                 else:
                     st.error("Ocorreu um erro ao salvar as notas.")
 
@@ -328,8 +332,8 @@ else:
 
     st.write(f"Bem-vindo, **{st.session_state['jurado_nome']}**! Aguardando equipes para votar.")
 
-    # Carrega equipes em votação
-    df_equipes = carregar_equipes_votando()
+    # Carrega equipes em votação para o jurado atual
+    df_equipes = carregar_equipes_votando(st.session_state['jurado_id'])
 
     if df_equipes.empty:
         st.info("Não há votações em andamento no momento. Aguardando atualização...")
@@ -342,39 +346,26 @@ else:
             nome_equipe = equipe['nome']
             grau_equipe = equipe['grau']
             ficha_tecnica = equipe['ficha_tecnica']
+            modalidade = equipe['modalidade']
+            id_modalidade = equipe['modalidade_id']  # Obtém o id_modalidade
             
             st.markdown("---")
             st.write(f"### Votação para a Equipe: **{nome_equipe}**")
+            st.write(f"**Modalidade:** {modalidade}")
             st.write(f"**Grau:** {grau_equipe}")
             st.write(f"**Ficha Técnica:** {ficha_tecnica}")
             
-            # Carregar modalidade da equipe
-            try:
-                conn = get_connection()
-                if not conn:
-                    st.error("Conexão com o banco de dados falhou.")
-                else:
-                    cursor = conn.cursor()
-                    cursor.execute('SELECT id_modalidade FROM tbl_equipes WHERE id_equipe = %s;', (int(id_equipe_selecionada),))
-                    resultado = cursor.fetchone()
-                    if resultado:
-                        id_modalidade_equipe = int(resultado[0])
-                    else:
-                        st.error("Modalidade da equipe não encontrada.")
-                        id_modalidade_equipe = None
-            except Exception as e:
-                st.error(f"Erro ao obter modalidade da equipe: {e}")
-                id_modalidade_equipe = None
-            finally:
-                if 'cursor' in locals():
-                    cursor.close()
-                if conn:
-                    conn.close()
-    
-            if id_modalidade_equipe:
-                criterios = carregar_criterios(id_modalidade_equipe)
-                if not criterios:
-                    st.warning("Não há critérios cadastrados para esta modalidade.")
-                else:
-                    # Exibir formulário de voto para a equipe atual
-                    exibir_formulario_voto(id_equipe_selecionada, st.session_state['jurado_id'], criterios)
+            # Carregar participantes da equipe
+            participantes = carregar_participantes(id_equipe_selecionada)
+            if participantes:
+                st.write("**Participantes:** " + ", ".join(participantes))
+            else:
+                st.write("**Participantes:** Sem participantes registrados.")
+            
+            # Carregar critérios da modalidade
+            criterios = carregar_criterios(id_modalidade)  # Passa o id_modalidade correto
+            if not criterios:
+                st.warning("Não há critérios cadastrados para esta modalidade.")
+            else:
+                # Exibir formulário de voto para a equipe atual
+                exibir_formulario_voto(id_equipe_selecionada, st.session_state['jurado_id'], criterios, participantes, modalidade)
