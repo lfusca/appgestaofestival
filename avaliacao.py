@@ -7,8 +7,7 @@ import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
 # Configuração da página
-st.set_page_config(page_title="Tela de Votação", layout="wide")
-st.title("Tela de Votação")
+st.set_page_config(page_title="AFM 2024", layout="wide")
 
 # Carrega as variáveis de ambiente
 load_dotenv()
