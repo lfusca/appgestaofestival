@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import os
 import pandas as pd
 
-
 st.title("Tela de Votação")
 
 # Carrega as variáveis de ambiente
