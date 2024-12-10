@@ -7,8 +7,7 @@ import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
 # Configuração da página
-st.set_page_config(page_title="Tela de Votação", layout="wide")
-st.title("Tela de Votação")
+st.set_page_config(page_title="AFM 2024", layout="wide")
 
 # Carrega as variáveis de ambiente
 load_dotenv()
@@ -250,7 +249,7 @@ def exibir_formulario_voto(id_equipe, id_jurado, criterios, participantes, modal
                             sucesso = False
                 if sucesso:
                     st.success("Notas salvas com sucesso!")
-                    st.experimental_rerun()  # Reexecuta a aplicação para atualizar a interface
+                    st_autorefresh(interval=2000, limit=1, key=f"refresh_{id_equipe}")  # Recarrega após 2 segundos
                 else:
                     st.error("Ocorreu um erro ao salvar as notas.")
 
@@ -296,13 +295,13 @@ def registrar_jurado_interface():
             else:
                 registrar_jurado(nome, login, senha)
 
-# Inicializa as variáveis de sessão
+# Verifica se o usuário já está logado
 if 'jurado_id' not in st.session_state:
     st.session_state['jurado_id'] = None
     st.session_state['jurado_nome'] = None
 
-# Tela de Login
 if st.session_state['jurado_id'] is None:
+    # Tela de Login
     st.write("### Login de Jurado")
     with st.form("login_form"):
         login = st.text_input("Login:")
@@ -317,7 +316,7 @@ if st.session_state['jurado_id'] is None:
                 if resultado:
                     st.session_state['jurado_id'], st.session_state['jurado_nome'] = resultado
                     st.success(f"Bem-vindo, {st.session_state['jurado_nome']}!")
-                    st.experimental_rerun()  # Reexecuta a aplicação após login
+                    st_autorefresh(interval=2000, limit=1, key="login_refresh")  # Recarrega após 2 segundos
                 else:
                     st.error("Credenciais inválidas. Por favor, tente novamente.")
     # Apenas para fins de teste, descomente a linha abaixo para acessar a interface de registro de jurados
@@ -328,7 +327,7 @@ else:
     if st.sidebar.button("Logout"):
         st.session_state['jurado_id'] = None
         st.session_state['jurado_nome'] = None
-        st.experimental_rerun()  # Reexecuta a aplicação após logout
+        st_autorefresh(interval=2000, limit=1, key="logout_refresh")  # Recarrega após 2 segundos
 
     st.write(f"Bem-vindo, **{st.session_state['jurado_nome']}**! Aguardando equipes para votar.")
 
@@ -348,20 +347,20 @@ else:
             ficha_tecnica = equipe['ficha_tecnica']
             modalidade = equipe['modalidade']
             id_modalidade = equipe['modalidade_id']  # Obtém o id_modalidade
-
+            
             st.markdown("---")
             st.write(f"### Votação para a Equipe: **{nome_equipe}**")
             st.write(f"**Modalidade:** {modalidade}")
             st.write(f"**Grau:** {grau_equipe}")
             st.write(f"**Ficha Técnica:** {ficha_tecnica}")
-
+            
             # Carregar participantes da equipe
             participantes = carregar_participantes(id_equipe_selecionada)
             if participantes:
                 st.write("**Participantes:** " + ", ".join(participantes))
             else:
                 st.write("**Participantes:** Sem participantes registrados.")
-
+            
             # Carregar critérios da modalidade
             criterios = carregar_criterios(id_modalidade)  # Passa o id_modalidade correto
             if not criterios:
