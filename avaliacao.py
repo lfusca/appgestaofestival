@@ -7,8 +7,8 @@ import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
 # Configuração da página
-st.set_page_config(page_title="AFM", layout="wide")
-st.title("AFM 2024")
+st.set_page_config(page_title="Tela de Votação", layout="wide")
+st.title("Tela de Votação")
 
 # Carrega as variáveis de ambiente
 load_dotenv()
@@ -296,13 +296,13 @@ def registrar_jurado_interface():
             else:
                 registrar_jurado(nome, login, senha)
 
-# Verifica se o usuário já está logado
+# Inicializa as variáveis de sessão
 if 'jurado_id' not in st.session_state:
     st.session_state['jurado_id'] = None
     st.session_state['jurado_nome'] = None
 
+# Tela de Login
 if st.session_state['jurado_id'] is None:
-    # Tela de Login
     st.write("### Login de Jurado")
     with st.form("login_form"):
         login = st.text_input("Login:")
