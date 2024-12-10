@@ -5,6 +5,7 @@ from streamlit_option_menu import option_menu
 from paginas import (
     cadastro_ano,
     controle_votacao,
+    classificacao, 
     cadastro_criterio,
     cadastro_equipe,
     cadastro_especialista,
@@ -35,6 +36,7 @@ def main():
             options=[
                 "Página Inicial",
                 "Gerenciar Votação",
+                "Classificação",
                 "Cadastro Ano",
                 "Cadastro Modalidade",
                 "Cadastro Critério",
@@ -48,6 +50,7 @@ def main():
             icons=[
                 "house",             # Página Inicial
                 "key",
+                "calendar",
                 "calendar",          # Cadastro Ano
                 "clipboard-data",    # Cadastro Modalidade
                 "list-task",         # Cadastro Critério
@@ -77,6 +80,9 @@ def main():
 
     elif escolha == "Gerenciar Votação":
         controle_votacao.show()
+
+    elif escolha == "Classificação":
+        classificacao.show()
 
     elif escolha == "Cadastro Critério":
         cadastro_criterio.show()
