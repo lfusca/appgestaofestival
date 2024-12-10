@@ -196,7 +196,7 @@ def salvar_notas(id_nota, nota):
             cursor.close()
         if conn:
             conn.close()
-
+        st_autorefresh(interval=2000, limit=1, key="logout_refresh")
 # Função para exibir formulário de voto
 def exibir_formulario_voto(id_equipe, id_jurado, criterios, participantes, modalidade):
     st.markdown("---")
